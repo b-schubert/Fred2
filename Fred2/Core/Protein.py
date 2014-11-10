@@ -9,6 +9,7 @@
 """
 __author__ = 'brachvogel'
 
+import itertools as iter
 from Bio.Seq import Seq
 from Bio.Alphabet import IUPAC
 
@@ -71,8 +72,37 @@ class Protein(MetadataLogger, Seq):
         :returns: Protein -- A protein consisting of the single letter at
                   position :attr:`index`.
         """
+        def frameshift_influences(res, start):
+            # find variants out side the peptide frame, still influencing it via a
+            # frameshift
+            accu = {} # accumulator for relevant variants
+
+            vars = sorted(iter.chain(*self.vars.values()), key=lambda v: v.genomePos)
+            shift = 0
+
+            for var in vars:
+
+                pos = var.get_protein_position(self.transcript_id)
+                new_shift = var.get_shift()
+
+                if pos < start:
+                    # does a variant yield a frame shift?
+                    if shift + new_shift:
+                        shift += new_shift
+                        accu.setdefault(pos, []).append(var)
+                    else:
+                        accu = {}
+                # here: var.get_protein_position >= start, we are done!
+                else:
+                    res.update(accu)
+                    break
+
+        if not isinstance(index, slice):
+            index = slice(index, index+1)
         item = str(self)[index]
-        return Protein(item, self.gene_id, self.orig_transcript, self.vars)
+        tmp_var = {pos:var_list for pos, var_list in self.vars.iteritems() if index.start <= pos <= index.stop}
+        frameshift_influences(tmp_var, index.start)
+        return Protein(item, self.gene_id, self.transcript_id, _orig_transcript=self.orig_transcript, _vars=tmp_var)
 
     def __repr__(self):
         # Header:

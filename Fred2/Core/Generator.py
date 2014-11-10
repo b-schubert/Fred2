@@ -12,6 +12,7 @@
 __author__ = 'schubert'
 
 import warnings
+import itertools as iter
 
 from Fred2.Core.Base import COMPLEMENT
 from Fred2.Core.Peptide import Peptide
@@ -32,7 +33,7 @@ def _update_var_offset(vars, transId_old, transId_new):
         offset = v.offsets[transId_old]
         v.offsets[transId_new] = offset
 
-def _incorp_snp(seq, var, transId, offset):
+def _incorp_snp(seq, var, transId, offset, externalOff=0):
     """
     incorporates a snp into the given transcript sequence
 
@@ -48,17 +49,17 @@ def _incorp_snp(seq, var, transId, offset):
     var.offsets[transId] = offset
 
     #print transId, len(seq), var.get_transcript_position(transId)-1
-    if seq[var.get_transcript_position(transId)-1] != var.ref:
-        warnings.warn("For %s bp dos not mmatch ref of assigned variant %s. Pos %i, var ref %s, seq ref %s " % (
-        transId, str(var), var.get_transcript_position(transId) - 1, var.ref,
-        seq[var.get_transcript_position(transId) - 1]))
+    #if seq[var.get_transcript_position(transId)-1-externalOff] != var.ref:
+    #    warnings.warn("For %s bp dos not mmatch ref of assigned variant %s. Pos %i, var ref %s, seq ref %s " % (
+    #    transId, str(var), var.get_transcript_position(transId) - 1-externalOff, var.ref,
+    #    seq[var.get_transcript_position(transId) - 1-externalOff]))
 
-    seq[var.get_transcript_position(transId)-1] = var.obs
+    seq[var.get_transcript_position(transId)-1-externalOff] = var.obs
 
     return seq, offset
 
 
-def _incorp_insertion(seq, var, transId, offset):
+def _incorp_insertion(seq, var, transId, offset, externalOff=0):
     """
     incorporates an insertion into the given transcript sequence
 
@@ -73,13 +74,13 @@ def _incorp_insertion(seq, var, transId, offset):
         raise TypeError("%s is not a insertion"%str(var))
 
     var.offsets[transId] = offset
-    pos = var.get_transcript_position(transId)
+    pos = var.get_transcript_position(transId)-externalOff
 
     seq[pos:pos] = var.obs
     return seq, offset + len(var.obs)
 
 
-def _incorp_deletion(seq, var, transId, offset):
+def _incorp_deletion(seq, var, transId, offset, externalOff=0):
     """
     incorporates a deletion into the given transcript sequence
 
@@ -95,7 +96,7 @@ def _incorp_deletion(seq, var, transId, offset):
 
     var.offsets[transId] = offset
     pos = var.get_transcript_position(transId)
-    s = slice(pos, pos+len(var.ref))
+    s = slice(pos-externalOff, pos+len(var.ref)-externalOff)
     del seq[s]
     return seq, offset - len(var.ref)
 
@@ -184,50 +185,95 @@ def generate_peptides_from_variants(vars, length, dbadapter):
         else:
             yield tId+":FRED2_%i"%transOff, seq, usedVs
 
-    def _generate_heterozygous(tId, vs, seq, usedVs, offset=None):
+    def _generate_heterozygous(tId, vs, seq, usedVs, newUsedVs, externalOff, oldTiD, offset=0):
         """
             incorporates heterozygous variants into polymorphic sequences
         """
+        print "In generate_herto",tId
         if vs:
             v = vs.pop()
             #find offset
-            offset = 0
-            if offset is None:
+            if not offset:
                 for uv in usedVs:
                     if uv.genomePos < v.genomePos:
-                        offset = uv.offsets[tId]
+                        offset = uv.offsets.get(tId, 0)
                     else:
                         break
 
             #generate combinatorial branches:
             vs_tmp = vs[:]
             tmp_seq = seq[:]
-            tmp_usedVs = usedVs[:]
+            tmp_newUsedVs = newUsedVs[:]
 
-            for s in _generate_combinations(tId, vs_tmp, tmp_seq, tmp_usedVs, offset=offset):
+            for s in _generate_heterozygous(tId, vs_tmp, tmp_seq, usedVs,tmp_newUsedVs, externalOff, oldTiD, offset=offset):
                     yield s
 
-            old_trans = generate_peptides_from_variants.transOff
-            generate_peptides_from_variants.transOff += 1
-            transOff = generate_peptides_from_variants.transOff
-            _update_var_offset(usedVs, tId+":FRED2_%i"%old_trans, tId+":FRED2_%i"%(transOff))
+            #old_trans = generate_peptides_from_variants.transOff
 
-            seq, offset = _incorp.get(v.type, lambda a, b, c, d: (a, d))(seq, v, tId+":FRED2_%i"%transOff, offset)
+            generate_peptides_from_variants.transOff_hetero += 1
+            transOff = generate_peptides_from_variants.transOff_hetero
+            new_tId = "_".join(tId.split("_")[:-1])+"_%i"%transOff
+            _update_var_offset(usedVs,  oldTiD, new_tId)
 
-            usedVs.append(v)
-            for s in _generate_combinations(tId, vs, seq, usedVs, offset=offset):
+            seq, offset = _incorp.get(v.type, lambda a, b, c, d: (a, d))(seq, v,  "_".join(tId.split("_")[:-1])+"_%i"%transOff, offset,
+                                                                         externalOff=externalOff)
+
+            newUsedVs.append(v)
+            for s in _generate_heterozygous(tId, vs, seq, usedVs,newUsedVs, externalOff,  new_tId, offset=offset):
                 yield s
         else:
-            yield tId+":FRED2_%i"%generate_peptides_from_variants.transOff, seq, usedVs
+            yield oldTiD, seq, newUsedVs
+    ####################################################################################################################
+
+    def frameshift_influences(tid, _vars, res, start):
+        # find variants out side the peptide frame, still influencing it via a
+        # frameshift
+        accu = [] # accumulator for relevant variants
+
+        _vars.sort(key=lambda v: v.genomePos) # necessary?
+        shift = 0
+
+        for var in _vars:
+
+            pos = var.get_protein_position(tid)
+            new_shift = var.get_shift()
+
+            if pos < start:
+                # does a variant yield a frame shift?
+                if shift + new_shift:
+                    shift += new_shift
+                    accu.append(var)
+                else:
+                    accu = {}
+            # here: var.get_protein_position >= start, we are done!
+            else:
+                res += accu
+                break
+
+    def get_influencing_vars(tId, vars, i, end):
+        # Generate peptide sequences and find the variants within each
+
+        pep_var = [v for v in vars if i <= v.get_transcript_position(tId) <= end]
+
+        # outside variants that affect the peptide via frameshift:
+        frameshift_influences(tId, vars, pep_var, i)
+        return pep_var
+
+    def trans_to_prot_pos(i):
+        return max((i//3) + 1, 0)
+
+    ####################################################################################################################
 
     if not isinstance(dbadapter, ADBAdapter):
         raise ValueError("The given dbadapter is not of type ADBAdapter")
 
     transToVar = {}
     for v in vars:
+        print v, v.isHomozygous
         for trans_id in v.coding.iterkeys():
             transToVar.setdefault(trans_id, []).append(v)
 
+    print transToVar
     for tId, vs in transToVar.iteritems():
         print tId
         query = dbadapter.get_transcript_information(tId)
@@ -253,21 +299,49 @@ def generate_peptides_from_variants(vars, length, dbadapter):
         generate_peptides_from_variants.transOff = 0
         prots = []
         vs_homo_and_fs = filter(lambda x: x.type in [VariationType.FSINS, VariationType.FSDEL] or x.isHomozygous, vs)
-        vs_hetero = filter(lambda x: not x.isHomozygious, vs)
+        generate_peptides_from_variants.transOff_hetero = 2**sum(1 for x in vs if x.type in [VariationType.FSINS, VariationType.FSDEL] and not x.isHomozygous)
 
+        vs_hetero = filter(lambda x: not x.isHomozygous and x.type not in [VariationType.FSINS, VariationType.FSDEL], vs)
+        print "VS total", vs
+        print "homo",vs_homo_and_fs
+        print "hetero snp",vs_hetero
         prots = []
         for tId, varSeq, varComb in _generate_combinations(tId, vs_homo_and_fs, list(tSeq), [], 0):
+            print "In Loop",tId,varSeq,varComb
             if vs_hetero:
-                for i in xrange(len(varSeq)+1-3*length):
+                for i in xrange(0,len(varSeq)+3-(3*length),3):
                     end = i+3*length
-                    frac_seq = varSeq[i:end]
-                    frac_var = filter(lambda x: i <= x.get_transcript_position < end, vs_hetero)
-                    for ttId, vvarSeq, vvarComb in _generate_heterozygous(tId, frac_var, frac_seq, varComb):
-                        prots.append(Transcript(geneid, ttId, "".join(vvarSeq), _vars=vvarComb).translate())
-            else:
-                prots.append(Transcript(geneid, tId, "".join(varSeq), _vars=varComb).translate())
+                    print "In Peptide loop",i,end, len(varSeq),len(varSeq)+3-(3*length),range(0,len(varSeq)+3-(3*length),3)
+                    frac_var = filter(lambda x: i <= x.get_transcript_position(tId) <= end, vs_hetero)
 
-        return generate_peptides_from_protein(prots, length)
+                    frac_usedVar = get_influencing_vars(tId, varComb, i, end+1)
+                    if not frac_var and not frac_usedVar:
+                        continue
+                    print "Fraction of heterozygious in rage ",i," ", end," ", [x.get_transcript_position(tId) for x in frac_var]
+
+                    frac_usedVar = get_influencing_vars(tId, varComb, i, end)
+                    for ttId, vvarSeq, vvarComb in _generate_heterozygous(tId, frac_var, varSeq, frac_usedVar, [], i,tId):
+                        print "In Peptide combinatoric loop",ttId, frac_usedVar, vvarComb,"".join(vvarSeq)
+                        vvarComb.extend(frac_usedVar)
+                        print vvarComb
+                        vvarComb.sort(key=lambda x: x.genomePos)
+
+                        if vvarComb:
+                            try:
+                                p = Transcript(geneid, ttId, "".join(vvarSeq), _vars=vvarComb).translate()
+                                print "Protein",repr(p),trans_to_prot_pos(i)-1,trans_to_prot_pos(end)-1
+                                prots.append(p[trans_to_prot_pos(i)-1:trans_to_prot_pos(end)-1])
+                            except ValueError:
+                                print "Protein not multiple of 3", ttId, vvarComb
+                                continue
+            else:
+                try:
+                    prots.append(Transcript(geneid, tId, "".join(varSeq), _vars=varComb).translate())
+                except ValueError:
+                    continue
+
+        #return generate_peptides_from_protein(prots, length)
+    return filter(lambda x: "*" not in str(x), generate_peptides_from_protein(prots, length))
 
 ################################################################################
 #        V A R I A N T S     = = >    T R A N S C R I P T S
@@ -510,7 +584,7 @@ def generate_peptides_from_protein(proteins, window_size):
             if protein.vars:
                 # variants within the peptide:
                 pep_var = [var for pos, var_list in protein.vars.iteritems() \
-                           for var in var_list if i <= pos <= end]
+                           for var in var_list if i <= pos <= end+1]
 
                 # outside variants that affect the peptide via frameshift:
                 frameshift_influences(protein.transcript_id, 

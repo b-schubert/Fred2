@@ -86,10 +86,10 @@ class Transcript(MetadataLogger, Seq):
         :param returns: (Protein) -- the protein that corresponds to the 
                         transcript
         """
-        # translate to a protein sequence
+        #translate to a protein sequence
         if len(str(self)) % 3 != 0:
             raise ValueError('ERROR while translating: lenght of transcript %s \
-is no multiple of 3, the transcript is:\n %s' % (self.transcript_id, self))
+            is no multiple of 3, the transcript is:\n %s' % (self.transcript_id, self))
 
         prot_seq = str(Seq.translate(self))
 
