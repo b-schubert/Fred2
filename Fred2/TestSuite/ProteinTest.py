@@ -218,9 +218,46 @@ class TestProteinClass(unittest.TestCase):
     #     self.assertTrue(all(var in vars_ for var in expected_vars))
 
     def test5_from_var_to_pep(self):
-        vars = [var_10, var_t1, var_13]
+
+        var_1 = Variant(
+        "var_1", VariationType.SNP, "chr1",
+        2,                    # Genomic Position
+        "A", "T",             # reference , observed
+        {"tsc_1": MutationSyntax("tsc_1", # transcript_id
+                            2,      # pos in transc
+                            1,       # pos in protein
+                            "",      # cdsMutationSyntax - irrelevant
+                            "")},     # aaMutationSyntax - irrelevant}, # dict of (transcrip_id : mutSnytaxes)
+        False, False)          # isHomozygous?, isSynonymous?
+
+        var_2 = Variant(
+        "var_2", VariationType.SNP, "chr1",
+        6,                    # Genomic Position
+        "C", "G",             # reference , observed
+        {"tsc_1":MutationSyntax("tsc_1", # transcript_id
+                            6,      # pos in transc
+                            2,       # pos in protein
+                            "",      # cdsMutationSyntax - irrelevant
+                            "")},     # aaMutationSyntax - irrelevant}, # dict of (transcrip_id : mutSnytaxes)
+        False, False)          # isHomozygous?, isSynonymous?
+
+
+        var_3 = Variant(
+        "var_3", VariationType.SNP, "chr1",
+        15,                    # Genomic Position
+        "G", "C",             # reference , observed
+        {"tsc_1":MutationSyntax("tsc_1", # transcript_id
+                            15,      # pos in transc
+                            5,       # pos in protein
+                            "",      # cdsMutationSyntax - irrelevant
+                            "")},     # aaMutationSyntax - irrelevant}, # dict of (transcrip_id : mutSnytaxes)
+        False, False)          # isHomozygous?, isSynonymous?
+
+
+
+        vars = [var_1, var_2, var_3]
         dummy_db = DummyAdapter()
-        p = generate_peptides_from_variants(vars, 4, dummy_db)
+        p = generate_peptides_from_variants(vars, 3, dummy_db)
         print p
         print len(p)
 

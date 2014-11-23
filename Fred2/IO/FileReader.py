@@ -70,7 +70,7 @@ def read_fasta(*argv, **kwargs):
                 # generate element:
                 try:
                     collect[seq.upper()] = _id.split("|")[kwargs["id_position"]]
-		    print collect[seq.upper()]
+                    #print collect[seq.upper()]
                 except KeyError:
                     collect[seq.upper()] = _id
 

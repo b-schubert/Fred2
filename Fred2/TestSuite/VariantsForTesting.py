@@ -163,8 +163,7 @@ var_10 = Variant(
     "var_10", VariationType.FSDEL, "chr1",
     1,                     # Genomic Position
     "GG", "",              # reference , observed
-    {"tsc_1":mut_syn1_10,
-     "tsc_2":mut_syn2_10}, # dict of (transcrip_id : mutSnytaxes)
+    {"tsc_1":mut_syn1_10}, # dict of (transcrip_id : mutSnytaxes)
     False, False)          # isHomozygous?, isSynonymous?
 
 
@@ -282,3 +281,10 @@ var_t2 = Variant(
     "G", "T",            # reference , observed
     {"tsc_1":mut_syn1_t}, # dict of (transcrip_id : mutSnytaxes)
     True, False, experimentalDesign="tumor")
+
+var_3h = Variant(
+    "var_3", VariationType.SNP, "chr1",
+    7,                    # Genomic Position
+    "C", "T",             # reference , observed
+    {"tsc_1":mut_syn1_3}, # dict of (transcrip_id : mutSnytaxes)
+    False, False)          # isHomozygous?, isSynonymous?

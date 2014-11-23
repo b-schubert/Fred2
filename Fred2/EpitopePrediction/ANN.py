@@ -125,7 +125,7 @@ class NetMHC(ANetMHC):
                            'B*44:03', 'B*45:01', 'B*46:01', 'B*48:01', 'B*51:01', 'B*53:01', 'B*54:01', 'B*57:01',
                            'B*58:01', 'B*73:01', 'B*83:01', 'C*03:03', 'C*04:01', 'C*05:01', 'C*06:02', 'C*07:01',
                            'C*07:02', 'C*08:02', 'C*12:03', 'C*14:02', 'C*15:02', 'E*01:01'])
-    __supported_length = frozenset([8, 9, 10, 11])
+    __supported_length = frozenset([8, 9, 10, 11,12,13,14])
     __name = "netmhc"
     __command = "netMHC -p %s -a %s -x %s >/dev/null"
 
@@ -175,7 +175,7 @@ class NetMHCpan(ANetMHC):
 
         Supported  MHC alleles currently only restricted to HLA alleles
     """
-    __supported_length = frozenset([8,9,10,11])
+    __supported_length = frozenset([8,9,10,11,12,13,14])
     __name = "netmhcpan"
     __command = "netMHCpan -p %s -a %s -ic50 -xls -xlsfile %s >/dev/null"
     __alleles = frozenset(['A*01:01', 'A*01:02', 'A*01:03', 'A*01:06', 'A*01:07', 'A*01:08', 'A*01:09', 'A*01:10', 'A*01:12',
@@ -550,7 +550,7 @@ class NetMHCII(ANetMHC,AExternal):
     """
         Implements a wrapper for NetMHCII
     """
-    __supported_length = frozenset([15])
+    __supported_length = frozenset([9,10,11,12,13,14,15,16])
     __name = "netmhcII"
     __command = 'netMHCII %s -a %s | grep -v "#" > %s'
     __alleles = frozenset(
@@ -598,7 +598,7 @@ class NetMHCIIpan(ANetMHC,AExternal):
         Implements a wrapper for NetMHCIIpan
     """
 
-    __supported_length = frozenset([8,9,10,11,12,13,14,15,16,17,18,19,20])
+    __supported_length = frozenset([9,10,11,12,13,14,15,16,17,18,19])
     __name = "netmchIIpan"
     __command = "netMHCIIpan -f %s -inptype 1 -a %s -xls -xlsfile %s >/dev/null"
     __alleles = frozenset(['DRB1*01:01', 'DRB1*01:02', 'DRB1*01:03', 'DRB1*01:04', 'DRB1*01:05', 'DRB1*01:06', 'DRB1*01:07',

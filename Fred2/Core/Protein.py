@@ -101,9 +101,10 @@ class Protein(MetadataLogger, Seq):
             index = slice(index, index+1)
         item = str(self)[index]
         tmp_var = {pos:var_list for pos, var_list in self.vars.iteritems() if index.start <= pos <= index.stop}
-        frameshift_influences(tmp_var, index.start)
-        return Protein(item, self.gene_id, self.transcript_id, _orig_transcript=self.orig_transcript, _vars=tmp_var)
 
+        frameshift_influences(tmp_var, index.start)
+        p= Protein(item, self.gene_id, self.transcript_id, _orig_transcript=self.orig_transcript, _vars=tmp_var)
+        return p
     def __repr__(self):
         # Header:
         lines = []
@@ -116,7 +117,6 @@ class Protein(MetadataLogger, Seq):
         for vpos, vset in self.vars.iteritems():
             for v in vset:
                 lines.append('\t pos %i: %s'%(vpos, v))
-
         return '\n\t'.join(lines) + '\n'
 
     def __eq__(self, other):

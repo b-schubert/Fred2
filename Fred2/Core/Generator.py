@@ -12,6 +12,7 @@
 __author__ = 'schubert'
 
 import warnings
+import math
 import itertools as iter
 
 from Fred2.Core.Base import COMPLEMENT
@@ -44,6 +45,7 @@ def _incorp_snp(seq, var, transId, offset, externalOff=0):
                        position of the variant
     :return: (list,int) the modified seq, the modified offset
     """
+    tmp_seq = seq[:]
     if VariationType.SNP != var.type:
         raise TypeError("%s is not a SNP"%str(var))
     var.offsets[transId] = offset
@@ -54,9 +56,10 @@ def _incorp_snp(seq, var, transId, offset, externalOff=0):
     #    transId, str(var), var.get_transcript_position(transId) - 1-externalOff, var.ref,
     #    seq[var.get_transcript_position(transId) - 1-externalOff]))
 
-    seq[var.get_transcript_position(transId)-1-externalOff] = var.obs
+    #print "incopr SNP ", var,var.get_transcript_position(transId),var.get_transcript_position(transId)-1-externalOff,externalOff
+    tmp_seq[var.get_transcript_position(transId)-1-externalOff] = var.obs
 
-    return seq, offset
+    return tmp_seq, offset
 
 
 def _incorp_insertion(seq, var, transId, offset, externalOff=0):
@@ -70,14 +73,15 @@ def _incorp_insertion(seq, var, transId, offset, externalOff=0):
                        position of the variant
     :return: (list,int) modified sequence, the modified offset
     """
+    tmp_seq = seq[:]
     if var.type not in [VariationType.INS, VariationType.FSINS]:
         raise TypeError("%s is not a insertion"%str(var))
 
     var.offsets[transId] = offset
     pos = var.get_transcript_position(transId)-externalOff
 
-    seq[pos:pos] = var.obs
-    return seq, offset + len(var.obs)
+    tmp_seq[pos:pos] = var.obs
+    return tmp_seq, offset + len(var.obs)
 
 
 def _incorp_deletion(seq, var, transId, offset, externalOff=0):
@@ -91,14 +95,15 @@ def _incorp_deletion(seq, var, transId, offset, externalOff=0):
                        position of the variant
     :return: (list,int) -- modified sequence, the modified offset
     """
+    tmp_seq=seq[:]
     if var.type not in [VariationType.DEL, VariationType.FSDEL]:
         raise TypeError("%s is not a deletion"%str(var))
 
     var.offsets[transId] = offset
     pos = var.get_transcript_position(transId)
     s = slice(pos-externalOff, pos+len(var.ref)-externalOff)
-    del seq[s]
-    return seq, offset - len(var.ref)
+    del tmp_seq[s]
+    return tmp_seq, offset - len(var.ref)
 
 
 _incorp = {
@@ -131,7 +136,7 @@ def _check_for_problematic_variants(vars):
             current_range = (v.genomePos, v.genomePos
                                       +len(v.ref)-1 if v.type in [VariationType.FSDEL, VariationType.DEL] else
                                       v.genomePos)
-            print "new block",v, current_range
+            #print "new block",v, current_range
     return True
 
 
@@ -189,7 +194,7 @@ def generate_peptides_from_variants(vars, length, dbadapter):
         """
             incorporates heterozygous variants into polymorphic sequences
         """
-        print "In generate_herto",tId
+        #print "In generate_herto",tId
         if vs:
             v = vs.pop()
             #find offset
@@ -260,7 +265,7 @@ def generate_peptides_from_variants(vars, length, dbadapter):
         return pep_var
 
     def trans_to_prot_pos(i):
-        return max((i//3) + 1, 0)
+        return int(max(math.ceil(i/3.0),1))
 
     ####################################################################################################################
 
@@ -273,9 +278,9 @@ def generate_peptides_from_variants(vars, length, dbadapter):
         for trans_id in v.coding.iterkeys():
             transToVar.setdefault(trans_id, []).append(v)
 
-    print transToVar
+    #print transToVar
     for tId, vs in transToVar.iteritems():
-        print tId
+        #print tId
         query = dbadapter.get_transcript_information(tId)
         if query is None:
             warnings.warn("Transcript with ID %s not found in DB"%tId)
@@ -302,37 +307,37 @@ def generate_peptides_from_variants(vars, length, dbadapter):
         generate_peptides_from_variants.transOff_hetero = 2**sum(1 for x in vs if x.type in [VariationType.FSINS, VariationType.FSDEL] and not x.isHomozygous)
 
         vs_hetero = filter(lambda x: not x.isHomozygous and x.type not in [VariationType.FSINS, VariationType.FSDEL], vs)
-        print "VS total", vs
-        print "homo",vs_homo_and_fs
-        print "hetero snp",vs_hetero
+        #print "VS total", vs
+        #print "homo",vs_homo_and_fs
+        #print "hetero snp",vs_hetero
         prots = []
         for tId, varSeq, varComb in _generate_combinations(tId, vs_homo_and_fs, list(tSeq), [], 0):
-            print "In Loop",tId,varSeq,varComb
+            #print "In Loop",tId,varSeq,varComb
             if vs_hetero:
-                for i in xrange(0,len(varSeq)+3-(3*length),3):
+                for i in xrange(0,len(varSeq)-(3*length-3),3):
                     end = i+3*length
-                    print "In Peptide loop",i,end, len(varSeq),len(varSeq)+3-(3*length),range(0,len(varSeq)+3-(3*length),3)
-                    frac_var = filter(lambda x: i <= x.get_transcript_position(tId) <= end, vs_hetero)
+                    #print "In Peptide loop",i,end, len(varSeq),len(varSeq)+3*length-(3*length),range(0,len(varSeq)+3-(3*length),3)
+                    frac_var = filter(lambda x: i <= x.get_transcript_position(tId)-1 <= end, vs_hetero)
 
                     frac_usedVar = get_influencing_vars(tId, varComb, i, end+1)
                     if not frac_var and not frac_usedVar:
                         continue
-                    print "Fraction of heterozygious in rage ",i," ", end," ", [x.get_transcript_position(tId) for x in frac_var]
+                    #print "Fraction of heterozygious in rage ",i," ", end," ", [x.get_transcript_position(tId) for x in frac_var]
 
                     frac_usedVar = get_influencing_vars(tId, varComb, i, end)
-                    for ttId, vvarSeq, vvarComb in _generate_heterozygous(tId, frac_var, varSeq, frac_usedVar, [], i,tId):
-                        print "In Peptide combinatoric loop",ttId, frac_usedVar, vvarComb,"".join(vvarSeq)
+                    for ttId, vvarSeq, vvarComb in _generate_heterozygous(tId, frac_var, varSeq, frac_usedVar, [], 0,tId[:]):
+                        #print "In Peptide combinatoric loop",ttId, frac_usedVar, vvarComb,"".join(vvarSeq),tId
                         vvarComb.extend(frac_usedVar)
-                        print vvarComb
+                        #print vvarComb
                         vvarComb.sort(key=lambda x: x.genomePos)
 
                         if vvarComb:
                             try:
                                 p = Transcript(geneid, ttId, "".join(vvarSeq), _vars=vvarComb).translate()
-                                print "Protein",repr(p),trans_to_prot_pos(i)-1,trans_to_prot_pos(end)-1
-                                prots.append(p[trans_to_prot_pos(i)-1:trans_to_prot_pos(end)-1])
+                                #print "Protein ",repr(p),i,end,i//3,i//3+length,p[i//3:i//3+length]
+                                prots.append(p[i//3:i//3+length])
                             except ValueError:
-                                print "Protein not multiple of 3", ttId, vvarComb
+                                #print "Protein not multiple of 3", ttId, vvarComb
                                 continue
             else:
                 try:
@@ -340,7 +345,7 @@ def generate_peptides_from_variants(vars, length, dbadapter):
                 except ValueError:
                     continue
 
-        #return generate_peptides_from_protein(prots, length)
+    #return generate_peptides_from_protein(prots, length)
     return filter(lambda x: "*" not in str(x), generate_peptides_from_protein(prots, length))
 
 ################################################################################
@@ -410,7 +415,7 @@ def generate_transcripts_from_variants(vars, dbadapter):
             transToVar.setdefault(trans_id, []).append(v)
 
     for tId, vs in transToVar.iteritems():
-        print tId
+        #print tId
         query = dbadapter.get_transcript_information(tId)
         if query is None:
             warnings.warn("Transcript with ID %s not found in DB"%tId)

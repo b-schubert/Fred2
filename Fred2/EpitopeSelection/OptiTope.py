@@ -56,7 +56,7 @@ class OptiTope(object):
 
         _alleles = copy.deepcopy(_results.columns.values.tolist())
 
-        print map(lambda x: x.locus, _alleles)
+        #print map(lambda x: x.locus, _alleles)
         #test if allele prob is set, if not set allele prob uniform
         #if only partly set infer missing values (assuming uniformity of missing value)
         prob = []
@@ -67,7 +67,7 @@ class OptiTope(object):
             else:
                 prob.append(a)
 
-        print no_prob
+        #print no_prob
         if len(no_prob) > 0:
             #group by locus
             no_prob_grouped = {}
@@ -77,7 +77,7 @@ class OptiTope(object):
             for a in prob:
                 prob_grouped.setdefault(a.locus, []).append(a)
 
-            print no_prob_grouped, prob_grouped
+            #print no_prob_grouped, prob_grouped
             for g, v in no_prob_grouped.iteritems():
                 total_loc_a = len(v)
                 if g in prob_grouped:
@@ -128,6 +128,7 @@ class OptiTope(object):
             prots = set(pr for pr in p.get_all_proteins())
             cons[seq] = len(prots)
             for prot in prots:
+                print "Gene ",prot, prot.gene_id
                 variations.append(prot.gene_id)
                 epi_var.setdefault(prot.gene_id, set()).add(seq)
         self.__peptideSet = peps
@@ -204,10 +205,10 @@ class OptiTope(object):
         self.instance.t_var.deactivate()
 
         #constraints
-        #self.instance.IsAlleleCovConst.deactivate()
+        self.instance.IsAlleleCovConst.deactivate()
         self.instance.MinAlleleCovConst.deactivate()
         #self.instance.AntigenCovConst.deactivate()
-        #self.instance.IsAntigenCovConst.deactivate()
+        self.instance.IsAntigenCovConst.deactivate()
         self.instance.MinAntigenCovConst.deactivate()
         self.instance.EpitopeConsConst.deactivate()
 
@@ -306,7 +307,7 @@ class OptiTope(object):
             deactivates the variation coverage constraint
         """
         self.__changed = True
-        self.instance.z.activate()
+        self.instance.z.deactivate()
         self.instance.t_var.deactivate()
         self.instance.IsAntigenCovConst.deactivate()
         self.instance.MinAntigenCovConst.deactivate()
@@ -355,7 +356,7 @@ class OptiTope(object):
             @exception EpitopeSelectionException: if the solver raised a problem or the solver is not accessible via the PATH environmental variable.
         """
         if self.__changed:
-            try:
+            #try:
                 self.instance.x.reset()
                 self.instance.y.reset()
                 self.instance.preprocess()
@@ -366,8 +367,7 @@ class OptiTope(object):
                     res.write(num=1)
 
                 if str(res.Solution.status) != 'optimal':
-                    print "Could not solve problem - " + str(res.Solution.status) + ". Please check your settings"
-                    sys.exit(-1)
+                    raise ValueError("Could not solve problem - " + str(res.Solution.status) + ". Please check your settings")
 
                 self.__result = [self.__peptideSet[x] for x in self.instance.x if self.instance.x[x].value == 1.0]
                 #self.__result.log_metadata("obj", res.Solution.Objective.Value)
@@ -379,9 +379,9 @@ class OptiTope(object):
 
                 self.__changed = False
                 return self.__result
-            except Exception as e:
-                print e
-                raise Exception("solve",
-                                "An Error has occurred during solving. Please check your settings and if the solver is registered in PATH environment variable.")
+            #except Exception as e:
+            #    #print e
+            #    raise Exception("solve",
+            #                  "An Error has occurred during solving. Please check your settings and if the solver is registered in PATH environment variable.")
         else:
             return self.__result

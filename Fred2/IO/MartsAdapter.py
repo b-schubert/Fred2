@@ -333,6 +333,7 @@ class MartsAdapter(ADBAdapter):
                + self.biomart_attribute%("snp_strand") \
                + self.biomart_attribute%("peptide_location") \
                + self.biomart_tail
+        print rq_n
         tsvreader = csv.DictReader(urllib2.urlopen(self.new_biomart_url+urllib2.quote(rq_n)).read().splitlines(), dialect='excel-tab')
         tsvselect = [x for x in tsvreader]
         if not tsvselect:

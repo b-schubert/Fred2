@@ -8,7 +8,7 @@
 
 """
 __author__ = 'schubert'
-
+import math
 from Fred2.Core.Base import MetadataLogger
 
 
@@ -152,4 +152,5 @@ class Variant(MetadataLogger):
         except KeyError:
             raise KeyError("Transcript ID %s not associated with variant %s"%
                            (str(trans_variant_id), self.__str__()))
-        return max((tpos//3) + 1, 0) # generate protein pos from transcript pos
+        return int(math.ceil(tpos/3.0))
+        #return max((tpos//3) + 1, 0) # generate protein pos from transcript pos <- think that is a bug  should be the ceil
