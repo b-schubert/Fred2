@@ -38,6 +38,20 @@ def __create_single_sequ(sequ, id, type):
     elif type == "Allele":
         return Allele(sequ)
 
+def __isValidAASequence(epitope):
+
+    epitope = epitope.strip()
+    if epitope == '':
+        return 1
+
+    if not epitope.isalpha():
+        return 0
+
+    # check for invalid letters
+    for aa in ['B','J','O','U','X','Z']:
+        if aa in epitope:
+            return 0
+    return 1
 
 ####################################
 #       F A S T A  -  R E A D E R
@@ -60,7 +74,7 @@ def read_fasta(*argv, **kwargs):
     _type = kwargs.get("type", "Peptide")
 
     __check_type(_type)
-    print kwargs
+    #print kwargs
     collect = {}
     # open all specified files:
     for name in argv:
@@ -69,13 +83,19 @@ def read_fasta(*argv, **kwargs):
             for _id, seq in SimpleFastaParser(handle):
                 # generate element:
                 try:
-                    collect[seq.upper()] = _id.split("|")[kwargs["id_position"]]
+                    if _type in ["Peptide", "Protein"]:
+                        if not __isValidAASequence(seq):
+                            continue
+                    if "id_position" not in kwargs:
+		    	collect[seq.upper()] = _id
+                    else:
+		    	collect[seq.upper()] = _id.split("|")[kwargs["id_position"]]
                     #print collect[seq.upper()]
                 except KeyError:
                     collect[seq.upper()] = _id
 
     return [__create_single_sequ(seq, _id, _type) \
-            for seq, _id in collect.items()]
+            for seq, _id in collect.iteritems()]
 
 
 ####################################
@@ -107,6 +127,9 @@ def read_lines(*argv, **kwargs):
             # iterate over all lines:
             for line in handle:
                 # generate element:
+                if "nof_lines" in kwargs:
+                    if kwargs["nof_lines"] < len(collect):
+                        break
                 collect.add(line.strip().upper())
 
     return [__create_single_sequ(seq, "generic_id_"+str(_id), _type) \
@@ -116,7 +139,7 @@ def read_lines(*argv, **kwargs):
 #####################################
 #       A N N O V A R  -  R E A D E R
 #####################################
-def read_annovar_exonic(annovar_file, gene_filter=None, experimentalDesig=None):
+def read_annovar_exonic(annovar_file, gene_filter=None, experimentalDesig=None, rs_id_pos=None):
     """
     Reads an gene-based ANNOVAR output file and generates Variant objects containing
     all annotated transcript ids an outputs a list variants.
@@ -147,12 +170,14 @@ def read_annovar_exonic(annovar_file, gene_filter=None, experimentalDesig=None):
                    ('frameshift', 'insertion'): VariationType.FSINS}
     with open(annovar_file, "r") as f:
         for line in f:
+            splits = line.split("\t")
             id, type, line, chrom, genome_start, genome_stop, ref, alt, zygos=map(lambda x: x.strip().lower(),
-                                                                              line.split("\t")[:9])
-            #print ref, alt
-
+                                                                              splits[:9])
+            #print id, ref, alt, zygos
+            if rs_id_pos is not None:
+                id = splits[rs_id_pos].strip()
             #test if its a intersting snp
-
+            #rsID = line[9]
             gene = line.split(":")[0].strip().upper()
 
             if gene not in gene_filter and len(gene_filter):
@@ -175,8 +200,9 @@ def read_annovar_exonic(annovar_file, gene_filter=None, experimentalDesig=None):
 
             ty = tuple(type.split())
 
-            vars.append(
-                Variant(id, type_mapper.get(ty, VariationType.UNKNOWN), chrom, int(genome_start), ref.upper(),
+            v = Variant(id, type_mapper.get(ty, VariationType.UNKNOWN), chrom, int(genome_start), ref.upper(),
                         alt.upper(), coding, zygos == "hom", ty[0] == "synonymous",
-                        experimentalDesign=experimentalDesig))
+                        experimentalDesign=experimentalDesig)
+            v.gene = gene
+            vars.append(v)
     return vars

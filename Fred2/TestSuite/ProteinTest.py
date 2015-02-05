@@ -257,9 +257,10 @@ class TestProteinClass(unittest.TestCase):
 
         vars = [var_1, var_2, var_3]
         dummy_db = DummyAdapter()
-        p = generate_peptides_from_variants(vars, 3, dummy_db)
-        print p
-        print len(p)
+        peps = generate_peptides_from_variants(vars, 2, dummy_db)
+        for p in peps:
+            print repr(p)
+        print len(peps)
 
 if __name__ == '__main__':
     unittest.main()

@@ -14,6 +14,7 @@ import pandas
 import os
 import warnings
 import subprocess
+import math
 
 from tempfile import NamedTemporaryFile
 
@@ -63,6 +64,9 @@ class ASVMEpitopePrediction(AEpitopePrediction, ASVM):
                 result[allales_string[a]] = {}
                 for pep, score in itertools.izip(encoding.keys(), pred):
                     result[allales_string[a]][pep_seqs[pep]] = score
+
+        if not result:
+            raise ValueError("No predictions have been made. Please check our input.")
 
         df_result = EpitopePredictionResult.from_dict(result)
         df_result.index = pandas.MultiIndex.from_tuples([tuple((i, self.name)) for i in df_result.index],
@@ -442,7 +446,10 @@ class UniTope(ASVMEpitopePrediction):
                 pred = svmlight.classify(model, encoding.values())
                 result[allales_string[a]] = {}
                 for pep, score in itertools.izip(encoding.keys(), pred):
-                    result[allales_string[a]][pep_seqs[pep]] = score
+                    result[allales_string[a]][pep_seqs[pep]] = math.copysign(1.0, score)
+
+        if not result:
+            raise ValueError("No predictions have been made. Please check our input.")
 
         df_result = EpitopePredictionResult.from_dict(result)
         df_result.index = pandas.MultiIndex.from_tuples([tuple((i, self.name)) for i in df_result.index],
@@ -611,9 +618,9 @@ class MHCIIMulti(AEpitopePrediction, AExternal):
         for a in allales_string.iterkeys():
 
             #cmd = self.command%(data_file, a, prediction_file, self._modelpath) #modelpath?
-            print self.command%(tmp_file.name, a, tmp_out.name)
+            #print self.command%(tmp_file.name, a, tmp_out.name)
             r = subprocess.call(self.command%(tmp_file.name, a, tmp_out.name), shell=True)
-            print "returnvalue ", type(r)
+            #print "returnvalue ", type(r)
 
             if r == -6:
                 warnings.warn("No model exists for allele %s."%str(allales_string[a]))
@@ -624,6 +631,9 @@ class MHCIIMulti(AEpitopePrediction, AExternal):
                 continue
 
             results[allales_string[a]] = {p:s for p, s in itertools.izip(pep_seqs.values(), self.parse_external_result(tmp_out))}
+
+        if not results:
+            raise ValueError("No predictions have been made. Please check our input.")
 
         df_result = EpitopePredictionResult.from_dict(results)
         df_result.index = pandas.MultiIndex.from_tuples([tuple((i,self.name)) for i in df_result.index],

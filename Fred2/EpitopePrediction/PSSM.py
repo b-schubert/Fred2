@@ -72,6 +72,9 @@ class APSSMEpitopePredictor(AEpitopePrediction):
                     result[allales_string[a]][pep_seqs[p]] = score
                     #print a, score, result
 
+        if not result:
+            raise ValueError("No predictions have been made. Please check our input.")
+
         df_result = EpitopePredictionResult.from_dict(result)
         df_result.index = pandas.MultiIndex.from_tuples([tuple((i,self.name)) for i in df_result.index],
                                                         names=['Seq','Method'])

@@ -43,7 +43,7 @@ class OptiTope(object):
             :param solver (String): the solver to be used (default glpsol)
     """
 
-    def __init__(self, _results,  threshold=None, k=10, solver="glpsol", verbosity=0):
+    def __init__(self, _results,  threshold=None, k=10, solver="glpsol", threads=1, verbosity=0):
         """
             Constructor
 
@@ -100,6 +100,7 @@ class OptiTope(object):
         self.__k = k
         self.__result = None
         self.__thresh = {} if threshold is None else threshold
+        self.__threads = threads
 
         # Variable, Set and Parameter preparation
         alleles_I = {}
@@ -116,19 +117,21 @@ class OptiTope(object):
         res_df = res_df[res_df.apply(lambda x: any(x[a] > self.__thresh.get(a.name, -float("inf"))
                                                    for a in res_df.columns), axis=1)]
 
+        #print "threshold", threshold, self.__thresh
         for tup in res_df.itertuples():
             p = tup[0]
             seq = str(p)
             peps[seq] = p
             for a, s in itr.izip(res_df.columns, tup[1:]):
-                if s > self.__thresh.get(a.name, -float("inf")):
+                #print seq, s, self.__thresh.get(a.name, -float("inf"))
+                if float(s) > self.__thresh.get(a.name, -float("inf")):
                     alleles_I.setdefault(a.name, set()).add(seq)
                 imm[seq, a.name] = s
 
             prots = set(pr for pr in p.get_all_proteins())
             cons[seq] = len(prots)
             for prot in prots:
-                print "Gene ",prot, prot.gene_id
+                #print "Gene ",prot, prot.gene_id
                 variations.append(prot.gene_id)
                 epi_var.setdefault(prot.gene_id, set()).add(seq)
         self.__peptideSet = peps
@@ -361,7 +364,7 @@ class OptiTope(object):
                 self.instance.y.reset()
                 self.instance.preprocess()
 
-                res = self.__solver.solve(self.instance)
+                res = self.__solver.solve(self.instance, options="threads=%i"%self.__threads)
                 self.instance.load(res)
                 if self.__verbosity > 0:
                     res.write(num=1)

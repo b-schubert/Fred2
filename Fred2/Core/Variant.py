@@ -99,6 +99,16 @@ class Variant(MetadataLogger):
                                        self.experimentalDesign) if self.experimentalDesign else "Variant(%s%i%s)" % (
         self.ref, self.genomePos, self.obs)
 
+    def __cmp__(self, other):
+        return cmp((self.ref,self.genomePos,self.obs),
+                   (other.ref,other.genomePos,other.obs))
+
+    def __eq__(self, other):
+        return (self.ref,self.genomePos,self.obs) == (other.ref,other.genomePos,other.obs)
+
+    def __hash__(self):
+        return hash((self.ref,self.genomePos,self.obs))
+
     def get_transcript_offset(self):
         return len(self.obs) - len(self.ref)
 

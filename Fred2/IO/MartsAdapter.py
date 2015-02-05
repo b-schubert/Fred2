@@ -29,8 +29,14 @@ class MartsAdapter(ADBAdapter):
         else:
             self.connection = None
 
-        self.biomart_url = "http://biomart.org/biomart/martservice?query="
-        self.new_biomart_url = """http://central.biomart.org/biomart/martservice?query="""
+        #self.biomart_url = "http://biomart.org/biomart/martservice?query="
+        #ensamble
+        self.biomart_url = "http://grch37.ensembl.org/biomart/martservice?query="
+        #self.biomart_url ="http://abinode06.informatik.uni-tuebingen.de:9000/biomart/martservice?query="
+        #self.new_biomart_url = "http://abinode06.informatik.uni-tuebingen.de:9000/biomart/martservice?query="
+        #ensamble
+        self.new_biomart_url = """http://grch37.ensembl.org/biomart/martservice?query="""
+        #self.new_biomart_url = """http://central.biomart.org/biomart/martservice?query="""
         self.biomart_head = """
         <?xml version="1.0" encoding="UTF-8"?>
             <!DOCTYPE Query>
@@ -209,7 +215,7 @@ class MartsAdapter(ADBAdapter):
                 + self.biomart_attribute%("strand")  \
                 + self.biomart_tail
 
-            print "Transcript information ",rq_n
+            #print "Transcript information ",rq_n
             tsvreader = csv.DictReader(urllib2.urlopen(self.biomart_url+urllib2.quote(rq_n)).read().splitlines(), dialect='excel-tab')
             tsvselect = [x for x in tsvreader]
             if not tsvselect:
@@ -284,18 +290,22 @@ class MartsAdapter(ADBAdapter):
                + self.biomart_attribute%("external_gene_id") \
                + self.biomart_attribute%("strand") \
                + self.biomart_tail
+        try:
+            tsvreader = csv.DictReader(urllib2.urlopen(self.biomart_url+urllib2.quote(rq_n)).read().splitlines(), dialect='excel-tab')
+            tsvselect = [x for x in tsvreader]
+            if not tsvselect:
+                warnings.warn("No entry found for ID %s"%db_id)
+                return None
 
-        tsvreader = csv.DictReader(urllib2.urlopen(self.biomart_url+urllib2.quote(rq_n)).read().splitlines(), dialect='excel-tab')
-        tsvselect = [x for x in tsvreader]
-        if not tsvselect:
-            warnings.warn("No entry found for ID %s"%db_id)
+            self.ids_proxy[db_id] = {EAdapterFields.SEQ: tsvselect[0]['Coding sequence'],
+                                                 EAdapterFields.GENE: tsvselect[0]['Associated Gene Name'],
+                                                 EAdapterFields.STRAND: "-" if int(tsvselect[0]['Strand']) < 0
+                                                 else "+"}
+            return self.ids_proxy[db_id]
+        except urllib2.HTTPError as e:
+            warnings.warn("Internal Error 500 occurred, %s"%str(e))
             return None
 
-        self.ids_proxy[db_id] = {EAdapterFields.SEQ: tsvselect[0]['Coding sequence'],
-                                             EAdapterFields.GENE: tsvselect[0]['Associated Gene Name'],
-                                             EAdapterFields.STRAND: "-" if int(tsvselect[0]['Strand']) < 0
-                                             else "+"}
-        return self.ids_proxy[db_id]
 
     def get_variant_id_from_protein_id(self,  **kwargs):
         """
@@ -325,15 +335,16 @@ class MartsAdapter(ADBAdapter):
         rq_n = self.biomart_head%(_db, _dataset) \
                + self.biomart_filter%(filter, str(db_id)) \
                + self.biomart_filter%("germ_line_variation_source", "dbSNP") \
-               + self.biomart_attribute%("snp_ensembl_gene_id") \
+               + self.biomart_attribute%("ensembl_gene_id") \
                + self.biomart_attribute%("variation_name") \
-               + self.biomart_attribute%("snp_chromosome_name") \
+               + self.biomart_attribute%("chromosome_name") \
                + self.biomart_attribute%("chromosome_location") \
                + self.biomart_attribute%("allele") \
-               + self.biomart_attribute%("snp_strand") \
+               + self.biomart_attribute%("strand") \
                + self.biomart_attribute%("peptide_location") \
+               + self.biomart_attribute%("ensembl_transcript_id")  \
                + self.biomart_tail
-        print rq_n
+        #print rq_n
         tsvreader = csv.DictReader(urllib2.urlopen(self.new_biomart_url+urllib2.quote(rq_n)).read().splitlines(), dialect='excel-tab')
         tsvselect = [x for x in tsvreader]
         if not tsvselect:
@@ -381,13 +392,17 @@ class MartsAdapter(ADBAdapter):
                + self.biomart_attribute%("snp_strand") \
                + self.biomart_attribute%("peptide_location") \
                + self.biomart_tail
-        tsvreader = csv.DictReader(urllib2.urlopen(self.new_biomart_url+urllib2.quote(rq_n)).read().splitlines(), dialect='excel-tab')
-        tsvselect = [x for x in tsvreader]
-        if not tsvselect:
-            warnings.warn("No entry found for ID %s"%db_id)
-            return None
+        try:
+            tsvreader = csv.DictReader(urllib2.urlopen(self.new_biomart_url+urllib2.quote(rq_n)).read().splitlines(), dialect='excel-tab')
+            tsvselect = [x for x in tsvreader]
+            if not tsvselect:
+                warnings.warn("No entry found for ID %s"%db_id)
+                return None
 
-        return tsvselect
+            return tsvselect
+        except urllib2.HTTPError as e:
+            warnings.warn("Internal Error 500 occurred, %s"%str(e))
+            return None
 
     def get_protein_sequence_from_protein_id(self, **kwargs):
         """
@@ -421,10 +436,10 @@ class MartsAdapter(ADBAdapter):
                + self.biomart_attribute%(filter) \
                + self.biomart_attribute%("peptide") \
                + self.biomart_tail
-        print rq_n
+        #print rq_n
         tsvreader = csv.DictReader(urllib2.urlopen(self.biomart_url+urllib2.quote(rq_n)).read().splitlines(), dialect='excel-tab')
         tsvselect = [x for x in tsvreader]
-        print tsvselect
+        #print tsvselect
         if not tsvselect:
             warnings.warn("No entry found for ID %s"%db_id)
             return None

@@ -89,7 +89,7 @@ class Protein(MetadataLogger, Seq):
                     # does a variant yield a frame shift?
                     if shift + new_shift:
                         shift += new_shift
-                        accu.setdefault(pos, []).append(var)
+                        accu.setdefault(pos-index.start+1, []).append(var)
                     else:
                         accu = {}
                 # here: var.get_protein_position >= start, we are done!
@@ -100,11 +100,11 @@ class Protein(MetadataLogger, Seq):
         if not isinstance(index, slice):
             index = slice(index, index+1)
         item = str(self)[index]
-        tmp_var = {pos:var_list for pos, var_list in self.vars.iteritems() if index.start <= pos <= index.stop}
+        tmp_var = {pos-index.start+1:var_list for pos, var_list in self.vars.iteritems() if index.start <= pos <= index.stop}
 
         frameshift_influences(tmp_var, index.start)
-        p= Protein(item, self.gene_id, self.transcript_id, _orig_transcript=self.orig_transcript, _vars=tmp_var)
-        return p
+        return Protein(item, self.gene_id, self.transcript_id, _orig_transcript=self.orig_transcript, _vars=tmp_var)
+
     def __repr__(self):
         # Header:
         lines = []

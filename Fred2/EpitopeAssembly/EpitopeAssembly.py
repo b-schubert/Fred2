@@ -31,7 +31,7 @@ class EpitopeAssembly(object):
         :param int verbosity: specifies how verbos the class will be, 0 means normal, >0 debug mode
     """
 
-    def __init__(self, peptides, pred, solver="glpk", weight=0.0, verbosity=0):
+    def __init__(self, peptides, pred, solver="glpk", weight=0.0, threads=1, verbosity=0):
 
         if not isinstance(pred, ACleavageSitePrediction):
             raise ValueError("Cleave site predictor must be of type ACleavageSitePrediction")
@@ -44,6 +44,7 @@ class EpitopeAssembly(object):
         #1. Generate peptides for which cleave sites have to be predicted
         #2. generate graph with dummy element
         self.__verbosity = verbosity
+        self.__threads = threads
 
         peptides.append("Dummy")
         edge_matrix = {}
@@ -117,7 +118,7 @@ class EpitopeAssembly(object):
         """
         self.instance.preprocess()
 
-        res = self.__solver.solve(self.instance)
+        res = self.__solver.solve(self.instance, options="threads=%i"%self.__threads)
         self.instance.load(res)
         if self.__verbosity > 0:
             res.write(num=1)
