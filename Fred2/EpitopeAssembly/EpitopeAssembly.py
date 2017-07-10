@@ -229,7 +229,7 @@ class EpitopeAssembly(object):
 
 class ParetoEpitopeAssembly(object):
     """
-        This implementation extends Toussaint et al.s TSP implementation which a bi-objective approach
+        This implementation extends Toussaint et al.s TSP implementation with a bi-objective approach
         that also minimizes the neoepitope formation at the junctions as second objective. (Unpublished)
 
         .. note::
@@ -253,7 +253,7 @@ class ParetoEpitopeAssembly(object):
         :param float weight: Specifies how strong unwanted cleavage sites should be punished [0,1], where 0 means they
                              will be ignored, and 1 the sum of all unwanted cleave sites is subtracted from the cleave
                              site between two epitopes
-        :param int verbosity: Specifies how verbos the class will be, 0 means normal, >0 debug mode
+        :param int verbosity: Specifies how verbose the class will be, 0 means normal, >0 debug mode
     """
 
     def __init__(self, peptides, cl_pred, ep_pred, alleles, threshold, comparator, length=9, solver="glpk", weight=0.0, matrix=None, verbosity=0):

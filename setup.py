@@ -20,6 +20,13 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 #                       depends=[path.join(d2s_src_dir, 'distance2self.hpp')],
 #                       sources=[path.join(d2s_src_dir, 'distance2self.cpp')])
 
+suffix_dir = path.join(here, "Fred2", "utility", "SuffixTree")
+print("Suffix_Tree",suffix_dir)
+_suffix_tree = Extension('Fred2._suffix_tree',
+                         define_macros=[('MAJOR_VERSION', '1'), ('MINOR_VERSION', '0')],
+                         include_dir=[suffix_dir],
+                         sources=[path.join(suffix_dir,'python_bindings.c'),
+                                  path.join(suffix_dir,'suffix_tree.c')])
 
 #data_files = list()
 # directories = glob.glob('Fred2/Data/svms/*/')
@@ -43,7 +50,7 @@ setup(
     name='Fred2',
 
     # Version:
-    version='2.0.1',
+    version='2.0.3',
 
     description='A Framework for Epitope Detection and Vaccine Design',
     long_description=readme,
@@ -118,8 +125,9 @@ setup(
 
     #ext_modules=[helloworld_module],
     #ext_modules=[d2s_module],
+    ext_modules=[_suffix_tree],
 
     # Run-time dependencies. (will be installed by pip when FRED2 is installed)
-    install_requires=['setuptools>=18.2', 'pandas', 'pyomo>=4.0','svmlight', 'MySQL-python >= 1.2.4', 'biopython', 'pyVCF'],
+    install_requires=['setuptools>=18.2', 'pandas', 'pyomo>=4.0','svmlight', 'pymysql', 'biopython', 'pyVCF'],
 
 )

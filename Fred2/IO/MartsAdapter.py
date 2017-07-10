@@ -11,7 +11,7 @@ import csv
 import urllib2
 import warnings
 import logging
-import MySQLdb
+import pymysql as MySQLdb
 from operator import itemgetter
 
 from Fred2.IO.ADBAdapter import ADBAdapter, EAdapterFields, EIdentifierTypes
