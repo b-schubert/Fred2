@@ -215,7 +215,7 @@ def generate_overlap_graph(seqs, min_overlap=1):
 
     k = len(seqs)
     stacks = [[] for _ in xrange(k)]
-    adja = np.zeros(shape=(k, k))
+    adja = np.zeros(shape=(k+1, k+1))
     st = GeneralisedSuffixTree(seqs)
     past = st.root
     reg = re.compile(r"(\D+)")
@@ -240,15 +240,19 @@ def generate_overlap_graph(seqs, min_overlap=1):
                     overlap = s[0].pathLabel
 
                     if len(overlap) >= min_overlap and suffix_idx != prefix_idx and prefix_idx < k:
-                        adja[suffix_idx, prefix_idx] = len(seqs[prefix_idx]) - len(overlap)
+                        adja[suffix_idx+1, prefix_idx+1] = len(seqs[prefix_idx]) - len(overlap)
                 else:
-                    adja[suffix_idx, prefix_idx] = len(seqs[prefix_idx])
+                    adja[suffix_idx+1, prefix_idx+1] = len(seqs[prefix_idx])
         # forward traversal
         else:
             # push onto the ith stack, for each  L(n)
             for j in n.L:
                 stacks[j].append(n)
             print "stacks:", representStack(stacks)
+
+    for i in xrange(k):
+        adja[0, i+1] = len(seqs[prefix_idx])
+
 
     return adja
 

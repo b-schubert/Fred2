@@ -3,7 +3,6 @@ import multiprocessing as mp
 from unittest import TestCase
 
 from Fred2.Core import Peptide
-from Fred2.EpitopeSelection.Mosaic import _suffixPrefixMatch
 from Fred2.Utility import GeneralisedSuffixTree, SuffixTree, generate_overlap_graph
 
 
@@ -30,6 +29,9 @@ class TestPeptide(TestCase):
     def test_overlapping_graph(self):
         sequences = ['ACGCA', 'CGCAT',"TCGCG", "CATTC","ATTCG"]
         adj = generate_overlap_graph(sequences)
+
+        print adj
+
         expected = np.array([[0, 4, 0, 2, 1],
                              [0, 0, 1, 3, 2],
                              [0, 2, 0, 0, 0],
