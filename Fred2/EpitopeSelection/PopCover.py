@@ -225,7 +225,7 @@ class PopCover(object):
 
         #initialize the score
         scoring[to_update] = pool.map(_popcover_score,
-                                      [(i + 1, beta, p_h, p_g, E, R, n_alleles, n_vars) for i in
+                                      [(i, beta, p_h, p_g, E, R, n_alleles, n_vars) for i in
                                        to_update])
         curr_selection = np.argmax(scoring)
         selection_naive.append(curr_selection)
@@ -240,7 +240,7 @@ class PopCover(object):
 
             to_update = __find_update_idx(curr_selection)
             scoring[to_update] = pool.map(_popcover_score,
-                                          [(i + 1, beta, p_h, p_g, E, R, n_alleles, n_vars) for i in
+                                          [(i, beta, p_h, p_g, E, R, n_alleles, n_vars) for i in
                                            to_update])
             curr_selection = np.argmax(scoring)
             scoring[curr_selection] = -float("inf")
