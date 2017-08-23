@@ -26,9 +26,6 @@ import math
 import numpy as np
 
 import multiprocessing as mp
-from operator import itemgetter
-
-from collections import defaultdict
 
 from pyomo.environ import *
 from pyomo.opt import SolverFactory, TerminationCondition
@@ -36,31 +33,6 @@ from pyomo.opt import SolverFactory, TerminationCondition
 from Fred2.Core.Result import EpitopePredictionResult
 from Fred2.Utility import generate_overlap_graph
 from Fred2.Utility import solve_TSP_LKH as _solve_tsp
-
-
-def _calculate_length(seqs, overlaps):
-    """
-    calculates the length of the current mosaic vaccine
-
-    :param list(int) seqs: a list of peptides indices
-    :param overlaps: an overlap graph
-    :type: numpy.array
-    :return: length of the mosaic vaccine
-    """
-    return sum(overlaps[seqs[i], seqs[i+1]] for i in xrange(len(seqs)-1))
-
-
-def _popcover_score(args):
-    """
-    calculates the greedy PopCover score
-    :param args: a tuple of arguments ()
-    :return: the popcover score for peptide i
-    """
-    i, beta, p_h, p_g, E, R, n_allele, n_var = args
-
-    return sum((R.get((h, g, i), 0)*p_g.get(g, 1)*p_h[h])/(beta+E.get((h, g), 0))
-               for h in xrange(n_allele)
-               for g in xrange(n_var))
 
 
 class MosaicVaccineILP(object):
@@ -126,7 +98,6 @@ class MosaicVaccineILP(object):
         res_df = _results.xs(_results.index.values[0][1], level="Method")
         res_df = res_df[res_df.apply(lambda x: any(x[a] > self.__thresh.get(a.name, -float("inf"))
                                                    for a in res_df.columns), axis=1)]
-
         imm = [0]
         variations = []
         cons = {0:0}
@@ -173,7 +144,7 @@ class MosaicVaccineILP(object):
                 cons[e] = 1
         self.__peps = peps
 
-        arc_cost = generate_overlap_graph(peps)
+        arc_cost = generate_overlap_graph(peps[1:])
 
         ################################################################################################################
         # initializes MIP model for OR with MTZ sub tour elimination
@@ -266,8 +237,8 @@ class MosaicVaccineILP(object):
         model.MinAlleleCovConst = Constraint(rule=lambda model: sum(model.z[a] for a in model.A) >= model.t_allele)
 
         model.IsAntigenCovConst = Constraint(model.Q,
-                                             rule=lambda model, q: sum(model.y[e] for e in model.E_var[q]) >= model.z[q])
-        model.MinAntigenCovConst = Constraint(rule=lambda model: sum(model.z[q] for q in model.Q) >= model.t_var)
+                                             rule=lambda model, q: sum(model.y[e] for e in model.E_var[q]) >= model.w[q])
+        model.MinAntigenCovConst = Constraint(rule=lambda model: sum(model.w[q] for q in model.Q) >= model.t_var)
         model.EpitopeConsConst = Constraint(model.Nodes,
                                             rule=lambda model, e: (1 - model.c[e]) * model.y[e] <= 1 - model.t_c)
 
@@ -437,7 +408,8 @@ class MosaicVaccineILP(object):
             i = j
 
         self.__result = sol
-        return sol
+        seqs = [self.__peps[i] for i,j in sol if i != 0]
+        return sol, seqs
 
 
 def _calc_set_popcover(args):
@@ -446,30 +418,59 @@ def _calc_set_popcover(args):
     :param args: (selection, beta, p_h, p_g, R)
     :return: the PopCover objective
     """
+    print(args)
     selection, beta, p_h, p_g, R, n_allele, n_vars = args
     score = 0
     for h in xrange(n_allele):
         for g in xrange(n_vars):
             E = sum(R.get((h, g, e), 0) for e in selection)
-            R = E > 0
-            score += (R*p_h[h]*p_g[g])/(beta+E)
+            r = E > 0
+            score += (r*p_h[h]*p_g[g])/(beta+E)
     return score
 
 
 def _calc_gcb_popcover_update(args):
     """
-    calculates the gcb update scores by solving a TSP for the currenct selection
+    calculates the gcb update scores by solving a TSP for the current selection
     and calculating the difference in score and path length with the previous solution
 
     :param args: tuple of
     :return:
     """
     selection, beta, p_h, p_g, R, O, prev_obj, prev_length, n_alleles, n_vars = args
-    curr_popcover = _calc_set_popcover(selection, beta, p_h, p_g, R, n_alleles, n_vars)
+    curr_popcover = _calc_set_popcover((selection, beta, p_h, p_g, R, n_alleles, n_vars))
     d_popcover = curr_popcover - prev_obj
-    (order, curr_length) = _solve_tsp(O, warmstart=selection)
+    order = _solve_tsp(O, warmstart=None)
+
+    curr_length = _calculate_length(order, O)
     d_length = curr_length - prev_length
+    print selection,"previous pop", prev_obj, "diff", d_popcover, "prev length",prev_length, "diff", d_length
     return d_popcover/d_length, curr_popcover, curr_length, order, selection[-1]
+
+
+def _calculate_length(seqs, overlaps):
+    """
+    calculates the length of the current mosaic vaccine
+
+    :param list(int) seqs: a list of peptides indices
+    :param overlaps: an overlap graph
+    :type: numpy.array
+    :return: length of the mosaic vaccine
+    """
+    return sum(overlaps[seqs[i], seqs[i+1]] for i in xrange(len(seqs)-1))
+
+
+def _popcover_score(args):
+    """
+    calculates the greedy PopCover score
+    :param args: a tuple of arguments ()
+    :return: the popcover score for peptide i
+    """
+    i, beta, p_h, p_g, E, R, n_allele, n_var = args
+
+    return sum((R.get((h, g, i), 0)*p_g[g]*p_h[h])/(beta+E.get((h, g), 0))
+               for h in xrange(n_allele)
+               for g in xrange(n_var))
 
 
 class MosaicVaccineGreedy(object):
@@ -488,7 +489,7 @@ class MosaicVaccineGreedy(object):
     selected set of epitopes, p_h is the frequency of allele h in a given population and p_g is the genomes frequency
 
     ::Note::
-    p_g is assmued to be 1 if not specified otherwise.
+    p_g is assumed to be 1 if not specified otherwise.
 
     """
 
@@ -561,8 +562,9 @@ class MosaicVaccineGreedy(object):
                     except:
                         thr = 0
 
+                    a_idx = a_to_idx[a]
                     if s >= thr:
-                        a_idx = a_to_idx[a]
+
                         alleles_epi.setdefault(a_idx, set()).add(i)
                         epi_alleles.setdefault(i, set()).add(a_idx)
                         for pr in p.get_all_proteins():
@@ -571,14 +573,14 @@ class MosaicVaccineGreedy(object):
                     imm[a_idx,k] = s if s >= thr else 0
 
                 else:
+                    a_idx = a_to_idx[a]
                     if s >= threshold.get(a.name, -float("inf")):
                         alleles_epi.setdefault(a_idx, set()).add(i)
                         epi_alleles.setdefault(i, set()).add(a_idx)
                         for pr in p.get_all_proteins():
                             pr_idx = v_to_idx[pr]
                             R[a_idx, pr_idx, k] = 1
-                    imm[a_idx, k] = s if s >= thr else 0
-
+                    imm[a_idx, k] = s if s >= threshold.get(a.name, -float("inf")) else 0
 
             for pr in p.get_all_proteins():
                 pr_idx = v_to_idx[pr]
@@ -605,7 +607,7 @@ class MosaicVaccineGreedy(object):
         self.__epi_alleles = epi_alleles
         self.__var_epi = var_epi
         self.__epi_var = epi_var
-        self.__overlap = generate_overlap_graph(peps)
+        self.__overlap = generate_overlap_graph(peps[1:])
         #self.__imm = imm
 
     def solve(self):
@@ -655,67 +657,85 @@ class MosaicVaccineGreedy(object):
         scoring[0] = -float("inf")
 
         #initialize the score
+        print "Initialization"
         scoring[to_update] = pool.map(_popcover_score,
                                       [(i, beta, p_h, p_g, E, R, n_alleles, n_vars) for i in
                                        to_update])
+
+        print "First Selection"
         curr_selection = np.argmax(scoring)
-        selection_gcb.append(curr_selection)
         selection_naive.append(curr_selection)
+
+        # first gcb selection is the peptide that has the largest score normalized by the average suffix prefix matches
+        print "GCB first selection"
+        curr_selection_gcb = np.argmax(scoring / self.__overlap.mean(axis=1))
+        curr_length_gbc = len(self.__peps[curr_selection_gcb-1])
+        selection_gcb.append(curr_selection_gcb)
         curr_length_naive = len(self.__peps[curr_selection-1])
-        curr_length_gbc = len(self.__peps[curr_selection - 1])
+
         scoring[curr_selection] = -float("inf")
 
+
         # simple selection
+        print "Naive Optimization"
         while curr_length_naive < self.__tMax:
+            print curr_selection, curr_length_naive, selection_naive
             # find indices that have to be updated
             for i in self.__epi_alleles[curr_selection]:
                 for j in self.__epi_var[curr_selection]:
                     E[i, j] = E.get((i, j), 0) + 1
 
             to_update = __find_update_idx(curr_selection, selection_naive)
+            print(to_update)
             scoring[to_update] = pool.map(_popcover_score,
                                           [(i, beta, p_h, p_g, E, R, n_alleles, n_vars) for i in
                                            to_update])
+
+            # search for the element with max score that still fits:
+            best_score = -float("inf")
+            best_element = None
+            for i in xrange(n_peps):
+                if scoring[i] >= best_score:
+                    best_element = i
+                    best_score = scoring[i]
+            if best_element is None:
+                break
+
             curr_selection = np.argmax(scoring)
             scoring[curr_selection] = -float("inf")
-            selection_naive.append(np.argmax(scoring))
+            selection_naive.append(curr_selection)
             curr_length_naive = _calculate_length(selection_naive, self.__overlap)
 
 
         # GCB part
+        print "GCB optimization"
         pep_idx = set(range(n_peps))
         pep_idx.remove(0)
         pep_idx.remove(selection_naive[1])
         O = self.__overlap
-        prev_obj = _calc_set_popcover(selection_gcb, beta, p_h, p_g, R)
+        prev_obj = _calc_set_popcover((selection_gcb, beta, p_h, p_g, R, n_alleles, n_vars))
         while curr_length_gbc < self.__tMax and pep_idx:
 
-            # TODO: Overlap slicing is incorrect...index must be sorted...
-            diff = pool.imap(_calc_gcb_popcover_update,
-                             [(selection_gcb+[i], beta, p_h, p_g, R,
-                               O[np.ix_(selection_gcb+[i], selection_gcb+[i])], prev_obj,
-                               curr_length_gbc, n_alleles, n_vars)
-                              for i in pep_idx])
+            tasks = []
+            for i in pep_idx:
+                tmp_idx = selection_gcb+[i]
+                tmp_idx.sort()
+                task = (selection_gcb + [i], beta, p_h, p_g, R,
+                        O[np.ix_(tmp_idx, tmp_idx)], prev_obj,
+                        curr_length_gbc, n_alleles, n_vars)
+                tasks.append(task)
+
+            diff = pool.map(_calc_gcb_popcover_update, tasks)
+            print(diff)
             (diff, imm, length, selection, i) = max(diff)
+            print "Difference:", diff, "Imm:", imm, "length", length, "Selected:",i
             selection_gcb = selection
             pep_idx.remove(i)
             curr_length_gbc = length
             prev_obj = imm
 
-        if _calc_set_popcover(selection_gcb, beta, p_h, p_g, R, n_alleles, n_vars) >= _calc_set_popcover(selection_naive, beta, p_h, p_g, R, n_alleles, n_vars):
+        if _calc_set_popcover((selection_gcb, beta, p_h, p_g, R, n_alleles, n_vars)) >= _calc_set_popcover(
+                (selection_naive, beta, p_h, p_g, R, n_alleles, n_vars)):
             return [self.__peps[i] for i in selection_gcb]
         else:
             return [self.__peps[i] for i in selection_naive]
-
-
-
-
-
-
-
-
-
-
-
-
-

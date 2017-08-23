@@ -17,6 +17,7 @@ def solve_TSP_LKH(A, startNode=None, warmstart=None):
     :return: A list of indixes representing the order of the hamiltonian circle
     :rtype: list(int)
     """
+
     tmp_conf = NamedTemporaryFile(delete=False)
     tmp_prob = NamedTemporaryFile(delete=False)
     tmp_out = NamedTemporaryFile(delete=False)
@@ -25,12 +26,12 @@ def solve_TSP_LKH(A, startNode=None, warmstart=None):
     # write config file:
     if warmstart is not None:
         tmp_warmstart = NamedTemporaryFile(delete=False)
-        warmstart = "INIT_TOUR_FILE = %s\n"%tmp_warmstart.name
+        warmstart_file = "INITIAL_TOUR_FILE = %s\n"%tmp_warmstart.name
         with tmp_warmstart as f:
-            f.write(" ".join(warmstart)+" -1")
+            f.write("\n".join(map(lambda x: str(x),warmstart))+"\n-1")
     else:
-        warmstart = ""
-    tmp_conf.write("PROBLEM_FILE = %s\nDISPLAY_DATA_TYPE = NO_DISPLAY\n'%sOUTPUT_TOUR_FILE = %s\n" %(tmp_prob.name, warmstart,tmp_out.name))
+        warmstart_file = ""
+    tmp_conf.write("PROBLEM_FILE = %s\n%sOUTPUT_TOUR_FILE = %s\n" %(tmp_prob.name, warmstart_file, tmp_out.name))
     tmp_conf.close()
     epis = []
     # write problem file:

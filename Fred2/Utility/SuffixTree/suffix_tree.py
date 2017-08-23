@@ -156,7 +156,6 @@ sequences.'''
                     pathIndices += c.pathIndices
                     sequences += c.sequences
                     idx = c.edgeLabel[0]
-                    print(n.dfsRank, c.isLeaf, idx, set(sequences))
                     if c.isLeaf and idx.isdigit() and n.start != -1:
                         L.append(int(idx)-1)
                     c = c.next
@@ -194,8 +193,6 @@ def generate_overlap_graph(seqs, min_overlap=1):
     :param int min_overlap: the minimum overlap needed to be connected in the overlap graph
     :return: Adjacency matrix of the overlap graph
     """
-    def representStack(stacks):
-        return "".join("["+",".join("Node({},{})".format(v.dfsRank,v.L) for v in s)+"]" for s in stacks)
 
     def updateBacktrace(n, past):
         # test if backward traversed and update the stacks accordingly
@@ -235,8 +232,6 @@ def generate_overlap_graph(seqs, min_overlap=1):
 
             for suffix_idx, s in enumerate(stacks):
                 if s:
-
-                    m = s[0]
                     overlap = s[0].pathLabel
 
                     if len(overlap) >= min_overlap and suffix_idx != prefix_idx and prefix_idx < k:
@@ -248,12 +243,11 @@ def generate_overlap_graph(seqs, min_overlap=1):
             # push onto the ith stack, for each  L(n)
             for j in n.L:
                 stacks[j].append(n)
-            print "stacks:", representStack(stacks)
 
     for i in xrange(k):
         adja[0, i+1] = len(seqs[prefix_idx])
 
-
+    adja[np.diag_indices(adja.shape[0])] = 0
     return adja
 
 
