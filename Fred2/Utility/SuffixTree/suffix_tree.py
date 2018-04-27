@@ -2,6 +2,10 @@ import re
 import numpy as np
 import Fred2._suffix_tree
 
+import itertools
+import numpy
+
+INF = 1000000
 
 def postOrderNodes(node):
     '''Iterator through all nodes in the sub-tree rooted in node in
@@ -123,7 +127,7 @@ sequences.'''
         self.startPositions = [0]
         concatString = ''
         for i in xrange(len(sequences)):
-            if chr(i+1) in sequences[i]:
+            if str(i+1) in sequences[i]:
                 raise ValueError("The suffix tree string must not contain chr(%d)!"%(i+1))
             concatString += str(sequences[i])+str(i+1)
             self.startPositions += [len(concatString)]
@@ -213,12 +217,16 @@ def generate_overlap_graph(seqs, min_overlap=1):
     k = len(seqs)
     stacks = [[] for _ in xrange(k)]
     adja = np.zeros(shape=(k+1, k+1))
+    print("constrcuting suffix_tree")
     st = GeneralisedSuffixTree(seqs)
+    print("end suffix_tree")
     past = st.root
     reg = re.compile(r"(\D+)")
-
+    preOrder = list(st.preOrderNodes)
+    #for n in st.preOrderNodes:#
+    c=0
     for n in st.preOrderNodes:
-
+        c+=1
         updateBacktrace(n, past)
         past = n
 
@@ -244,17 +252,14 @@ def generate_overlap_graph(seqs, min_overlap=1):
             for j in n.L:
                 stacks[j].append(n)
 
+    print("postprocessing")
     for i in xrange(k):
         adja[0, i+1] = len(seqs[prefix_idx])
-
+    print("Done")
     adja[np.diag_indices(adja.shape[0])] = 0
     return adja
 
 
-import itertools
-import numpy
-
-INF = 1000000
 
 
 class TSPExact:

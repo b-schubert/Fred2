@@ -22,7 +22,7 @@ from __future__ import division
 import itertools as itr
 import copy
 import math
-
+import time
 import numpy as np
 
 import multiprocessing as mp
@@ -37,7 +37,7 @@ from Fred2.Utility import solve_TSP_LKH as _solve_tsp
 
 class MosaicVaccineILP(object):
 
-    def __init__(self, _results, threshold=None, t_max=100, solver="cplex", verbosity=0, processes=1):
+    def __init__(self, _results, threshold=None, t_max=100, k=999999999999, solver="cplex", verbosity=0):
         # check input data
         if not isinstance(_results, EpitopePredictionResult):
             raise ValueError("first input parameter is not of type EpitopePredictionResult")
@@ -86,6 +86,8 @@ class MosaicVaccineILP(object):
         self.__result = None
         self.__thresh = {} if threshold is None else threshold
         self.__pep_to_index = {}
+        self.__k = k
+
         # Variable, Set and Parameter preparation
         alleles_I = {}
         variations = []
@@ -118,9 +120,9 @@ class MosaicVaccineILP(object):
                     except:
                         thr = 0
 
+                    s = min(1., max(0.0, 1.0 - math.log(s, 50000)))
                     if s >= thr:
                         alleles_I.setdefault(a.name, set()).add(i)
-                        s = min(1., max(0.0, 1.0 - math.log(s, 50000)))
                         im += probs[a.name] * s
                 else:
                     if s >= self.__thresh.get(a.name, -float("inf")):
@@ -152,30 +154,43 @@ class MosaicVaccineILP(object):
         model = ConcreteModel()
 
         ################################################################################################################
-        # Sets
+        print("Sets")
         ################################################################################################################
         model.Nodes = RangeSet(0, len(peps) - 1)
-
+        print("Nodes")
         model.Q = Set(initialize=variations)
+        print("Q")
         model.A = Set(initialize=alleles_I.keys())
+        print("A")
         model.E_var = Set(model.Q, initialize=lambda mode, v: epi_var[v])
+        print("E_var")
         model.A_I = Set(model.A, initialize=lambda model, a: alleles_I[a])
-
+        print("A_I")
         def arc_init(model):
             return ((i, j) for j in model.Nodes for i in model.Nodes if i != j)
 
-        model.Arcs = Set(dimen=2, initialize=arc_init)
+        #start = time.time()
+        #model.Arcs = Set(dimen=2, initialize=arc_init)#
+        #stop = time.time()
+        #print("Arcs", stop-start)
 
-        def NodesOut_init(model, node):
-            return [j for (i, j) in model.Arcs if i == node]
-        model.NodesOut = Set(model.Nodes, initialize=NodesOut_init)
+        # dont know if this includes self references as well....
+        model.Arcs = model.Nodes * model.Nodes
 
-        def NodesIn_init(model, node):
-            return [i for (i, j) in model.Arcs if j == node]
-        model.NodesIn = Set(model.Nodes, initialize=NodesIn_init)
+
+        # since graph is fully connected
+        #nodes = set(range(len(peps)))
+        #def NodesOut_init(model, node):
+        #    return nodes - set(node)
+        #model.NodesOut = Set(model.Nodes, initialize=NodesOut_init)
+        #print("Nodes_out")
+        #def NodesIn_init(model, node):
+        #    return [i for (i, j) in model.Arcs if j == node]
+        #model.NodesIn = Set(model.Nodes, initialize=NodesIn_init)
+        #print("Nodes_in")
 
         ################################################################################################################
-        # Params
+        print("Params")
         ################################################################################################################
         def i_init(model, i):
             return imm[i]
@@ -184,7 +199,7 @@ class MosaicVaccineILP(object):
         def d_init(model, i, j):
             return arc_cost[i][j]
         model.d = Param(model.Arcs, initialize=d_init)
-
+        model.k = Param(initialize=self.__k, within=PositiveIntegers, mutable=True)
         model.c = Param(model.Nodes, initialize=lambda model, e: cons[e], mutable=True)
         model.TMAX = Param(initialize=self.__t_max, within=PositiveIntegers, mutable=True)
         model.t_allele = Param(initialize=0, within=NonNegativeIntegers, mutable=True)
@@ -192,7 +207,7 @@ class MosaicVaccineILP(object):
         model.t_c = Param(initialize=0.0, within=NonNegativeReals, mutable=True)
 
         ################################################################################################################
-        # Variables
+        print("Variables")
         ################################################################################################################
         model.x = Var(model.Arcs, domain=Binary, bounds=(0, 1), initialize=0)
         model.z = Var(model.A, domain=Binary, initialize=0)
@@ -205,31 +220,39 @@ class MosaicVaccineILP(object):
                               sense=maximize)
 
         ################################################################################################################
-        # Constraints
+        print("Constraints")
         ################################################################################################################
         # conecitfity constraint
+        print("Con1 start")
         def Conn1_rule(model, node):
-            return sum(model.x[node, j] for j in model.NodesOut[node]) <= 1.0
+            return sum(model.x[node, j] for j in model.Nodes if j != node) <= 1.0
         model.Conn1 = Constraint(model.Nodes, rule=Conn1_rule)
-
+        print("Con1 end")
+        print("Con2 start")
         def Conn2_rule(model, node):
-            return sum(model.x[i, node] for i in model.NodesIn[node]) <= 1.0
-        model.Conn2 = Constraint(model.Nodes, rule=Conn1_rule)
-
+            return sum(model.x[i, node] for i in model.Nodes if i != node) <= 1.0
+        model.Conn2 = Constraint(model.Nodes, rule=Conn2_rule)
+        print("Con2 end")
         # Equality constraint
+        print("equal start")
         def Equal_rule(model, node):
-            return sum(model.x[node, j] for j in model.NodesOut[node]) == sum(model.x[i, node] for i in model.NodesIn[node])
+            return sum(model.x[node, j] for j in model.Nodes if j != node) == sum(model.x[i, node] for i in model.Nodes if i != node)
         model.Equal = Constraint(model.Nodes, rule=Equal_rule)
-
+        print("equal end")
+        print("knapsack start")
         # Knapsack Constriant
         def Knapsack_rule(model):
             return sum(model.d[i, j] * model.x[i, j] for i, j in model.Arcs) <= self.__t_max
         model.Knapsack = Constraint(rule=Knapsack_rule)
-
+        print("knapsack ene")
+        print("selection specific start")
         #connecting arc variables and node variables
         model.IsNodeSelected = Constraint(model.Nodes,
                                           rule=lambda model, n: sum(model.x[n, m]
                                                                     for m in model.Nodes if n != m) >= model.y[n])
+
+        #constraints number of epitopes selected
+        model.nofEpitopes = Constraint(rule=lambda model: sum(model.y[n] for n in model.Nodes)<= model.k)
 
         #optional constraints (in basic model they are disabled)
         model.IsAlleleCovConst = Constraint(model.A,
@@ -241,7 +264,8 @@ class MosaicVaccineILP(object):
         model.MinAntigenCovConst = Constraint(rule=lambda model: sum(model.w[q] for q in model.Q) >= model.t_var)
         model.EpitopeConsConst = Constraint(model.Nodes,
                                             rule=lambda model, e: (1 - model.c[e]) * model.y[e] <= 1 - model.t_c)
-
+        print("selection specific start")
+        print("MTZ start")
         # Subout Elimination MTZ
         def Subtour_rule(model, i, j):
             return model.u[i] - model.u[j] + (len(self.__peps) - 1) * model.x[i, j] <= len(self.__peps) - 2
@@ -249,7 +273,7 @@ class MosaicVaccineILP(object):
         model.SubTour = Constraint(((i, j) for i in xrange(1, len(self.__peps))
                                     for j in xrange(1, len(self.__peps)) if i != j), rule=Subtour_rule)
 
-
+        print("MTZ end")
         #generate instance
         self.instance = model
         if self.__verbosity > 0:
@@ -262,6 +286,23 @@ class MosaicVaccineILP(object):
         self.instance.IsAntigenCovConst.deactivate()
         self.instance.MinAntigenCovConst.deactivate()
         self.instance.EpitopeConsConst.deactivate()
+
+    def set_k(self, k):
+        """
+            Sets the number of epitopes to select
+
+            :param int k: The number of epitopes
+            :raises ValueError: If the input variable is not in the same domain as the parameter
+        """
+        tmp = self.instance.k.value
+        try:
+            getattr(self.instance, str(self.instance.k)).set_value(int(k))
+            self.__changed = True
+        except ValueError:
+            self.__changed = False
+            getattr(self.instance, str(self.instance.k)).set_value(int(tmp))
+            raise ValueError('set_k', 'An error has occurred during setting parameter k. Please check if k is integer.')
+
 
     def set_Tmax(self, t_max):
         """
@@ -379,7 +420,7 @@ class MosaicVaccineILP(object):
         self.__changed = True
         self.instance.EpitopeConsConst.deactivate()
 
-    def solve(self, options=""):
+    def solve(self, options=None):
         """
             solves the model optimally
         """
@@ -389,7 +430,7 @@ class MosaicVaccineILP(object):
         options = dict() if options is None else options
         instance = self.instance
 
-        res = self.__solver.solve(instance, options=options, tee=self.__verbosity)
+        res = self.__solver.solve(instance, options=options, tee=1)
         instance.solutions.load_from(res)
         if self.__verbosity > 0:
             res.write(num=1)
